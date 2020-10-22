@@ -1,4 +1,5 @@
 use clap::{Arg, App, SubCommand};
+use std::fs::read_to_string;
 
 type Key = [char; 10];
 
@@ -61,6 +62,14 @@ fn print_key(key: Key)
     println!(" 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9");
 }
 
+fn print_msg(msg: Message)
+{
+    for v in msg {
+        print!("{}", v);
+    }
+    println!("");
+}
+
 /// Accepts encryption input as a string, checks that it contains only digits,
 /// and returns vector of these digits.
 fn create_message(msg: &str) -> Result<Message, String>
@@ -105,6 +114,17 @@ fn decrypt(encrypted: &str, key: Key) -> Result<Message, String>
     Ok(decrypted)
 }
 
+fn parse_file(path: &str) -> Result<Vec<String>, String>
+{
+    let contents = read_to_string(path).expect("Something went wrong reading the file");
+
+    let split = contents.split("\n");
+
+    let res = split.map(|t| t.to_owned());
+
+    return Ok(res.collect());
+}
+
 fn main() -> Result<(), String>
 {
     let matches = App::new("SARNEG")
@@ -117,10 +137,22 @@ fn main() -> Result<(), String>
         .subcommand(SubCommand::with_name("encrypt")
             .arg(Arg::with_name("key"))
             .arg(Arg::with_name("msg"))
+            .arg(Arg::with_name("file")
+                .short("f")
+                .multiple(false)
+                .value_name("FILE")
+                .takes_value(true)
+                .help("Path to file containing list of strings to encrypt one per line."))
         )
         .subcommand(SubCommand::with_name("decrypt")
             .arg(Arg::with_name("key"))
             .arg(Arg::with_name("msg"))
+            .arg(Arg::with_name("file")
+                .short("f")
+                .multiple(false)
+                .value_name("FILE")
+                .takes_value(true)
+                .help("Path to file containing list of strings to encrypt one per line."))
         )
         .get_matches();
 
@@ -135,20 +167,41 @@ fn main() -> Result<(), String>
         
         ("encrypt", Some(encrypt_matches)) => {
             let key = encrypt_matches.value_of("key").unwrap();
-            let msg = encrypt_matches.value_of("msg").unwrap();
             let key = create_key(key)?;
-            let msg = create_message(msg)?;
-            let encrypted = encrypt(key, msg);
-            println!("{}", encrypted);
+
+            let file = encrypt_matches.value_of("file");
+            if let Some(path) = file {
+                let inputs = parse_file(path)?;
+                for msg in inputs {
+                    let msg = create_message(&msg)?;
+                    let encrypted = encrypt(key, msg);
+                    println!("{}", encrypted);
+                }
+            } else {
+                let msg = encrypt_matches.value_of("msg").unwrap();
+                let msg = create_message(msg)?;
+                let encrypted = encrypt(key, msg);
+                println!("{}", encrypted);
+            }
             Ok(())
         },
 
         ("decrypt", Some(decrypt_matches)) => {
             let key = decrypt_matches.value_of("key").unwrap();
-            let encrypted = decrypt_matches.value_of("msg").unwrap();
             let key = create_key(key)?;
-            let msg = decrypt(encrypted, key)?;
-            println!("{:?}", msg);
+
+            let file = decrypt_matches.value_of("file");
+            if let Some(path) = file {
+                let inputs = parse_file(path)?;
+                for encrypted in inputs {
+                    let msg = decrypt(&encrypted, key)?;
+                    print_msg(msg);
+                }
+            } else {
+                let encrypted = decrypt_matches.value_of("msg").unwrap();
+                let msg = decrypt(encrypted, key)?;
+                print_msg(msg);
+            }
             Ok(())
         },
 
